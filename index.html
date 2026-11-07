@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>ハロウィンゲーム（試作）</title>
+<style>
+  :root{
+    --bg:#1f1830; --panel:#2d2546; --ink:#fff6ea; --sub:#bdb2d8;
+    --accent:#ffb36b; --pink:#ff9ad5; --btn:#43386a; --btn-hi:#5a4c8c;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+    font-family:"DotGothic16","Hiragino Maru Gothic ProN","Hiragino Sans",monospace;
+    -webkit-user-select:none;user-select:none;overscroll-behavior:none;touch-action:manipulation}
+  #app{max-width:520px;margin:0 auto;height:100%;display:flex;flex-direction:column;
+    padding:max(10px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom))}
+  .hidden{display:none!important}
+  button{font:inherit;color:var(--ink);background:var(--btn);border:0;border-radius:6px;
+    box-shadow:0 4px 0 #16112a;cursor:pointer;touch-action:manipulation}
+  button:active{transform:translateY(3px);box-shadow:0 1px 0 #16112a;background:var(--btn-hi)}
+
+  /* ステージ選択 */
+  #select{flex:1;display:flex;flex-direction:column;gap:14px}
+  h1{font-size:26px;margin:18px 0 0;text-align:center;letter-spacing:.08em;color:var(--accent)}
+  .lead{text-align:center;color:var(--sub);font-size:13px;margin:0}
+  #stageList{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:8px}
+  #stageList button{padding:14px 10px;text-align:left;display:flex;flex-direction:column;gap:6px;min-height:84px}
+  #stageList .no{font-size:12px;color:var(--sub)}
+  #stageList .nm{font-size:16px}
+  #stageList .st{font-size:14px;color:#ffe066;letter-spacing:.1em}
+  .ver{text-align:center;color:#6f6590;font-size:11px;margin:auto 0 0}
+
+  /* プレイ画面 */
+  #play{flex:1;display:flex;flex-direction:column;gap:8px;min-height:0}
+  .top{display:flex;align-items:center;gap:8px}
+  .top button{padding:8px 10px;font-size:14px}
+  #stageTitle{flex:1;font-size:16px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .info{display:flex;justify-content:space-between;gap:6px;font-size:14px;background:var(--panel);
+    padding:6px 10px;border-radius:6px}
+  .info b{color:var(--accent);font-weight:normal}
+  #powerInfo{color:#a8c0ff}
+  /* 左右の余白をはみ出させて、スマホでも1ドットを実機4ピクセルで出せる幅を確保する */
+  #boardWrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;position:relative;margin:0 -9px}
+  canvas{image-rendering:pixelated;display:block;border-radius:4px}
+  #tip{font-size:13px;color:var(--sub);background:var(--panel);border-radius:6px;padding:7px 10px;line-height:1.5;min-height:2.6em}
+  .controls{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px;padding-top:4px}
+  .pad{display:grid;grid-template-columns:repeat(3,64px);grid-template-rows:repeat(3,58px);gap:6px}
+  .pad button{font-size:24px}
+  .pad .u{grid-column:2;grid-row:1}.pad .l{grid-column:1;grid-row:2}
+  .pad .r{grid-column:3;grid-row:2}.pad .d{grid-column:2;grid-row:3}
+  .side{display:flex;flex-direction:column;gap:10px}
+  .side button{padding:12px 6px;font-size:14px}
+
+  /* オーバーレイ */
+  #overlay{position:fixed;inset:0;background:rgba(15,10,28,.72);display:flex;align-items:center;justify-content:center;z-index:5}
+  .card{background:var(--panel);border-radius:10px;padding:22px 20px;width:min(86vw,340px);text-align:center;
+    box-shadow:0 6px 0 #16112a}
+  .card h2{margin:0 0 6px;font-size:24px}
+  .card p{margin:6px 0;color:var(--sub);font-size:14px}
+  .card .stars{font-size:34px;color:#ffe066;letter-spacing:.15em;margin:8px 0}
+  .card .btns{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+  .card .btns button{padding:12px;font-size:16px}
+  .card .btns .main{background:#e0775a}
+</style>
+</head>
+<body>
+<div id="app">
+  <section id="select">
+    <h1>ハロウィンゲーム</h1>
+    <p class="lead">しさくばん ― おばけになって おかしを あつめよう</p>
+    <div id="stageList"></div>
+    <p class="ver">ver. 2026-11-08 07:01</p>
+  </section>
+
+  <section id="play" class="hidden">
+    <div class="top">
+      <button id="backBtn">◀ もどる</button>
+      <div id="stageTitle"></div>
+    </div>
+    <div class="info">
+      <span>おかし のこり <b id="candyInfo">0</b></span>
+      <span id="powerInfo"></span>
+      <span>てすう <b id="moveInfo">0</b> <small id="parInfo"></small></span>
+    </div>
+    <div id="boardWrap"><canvas id="board"></canvas></div>
+    <div id="tip"></div>
+    <div class="controls">
+      <div></div>
+      <div class="pad">
+        <button class="u" data-dir="up">▲</button>
+        <button class="l" data-dir="left">◀</button>
+        <button class="r" data-dir="right">▶</button>
+        <button class="d" data-dir="down">▼</button>
+      </div>
+      <div class="side">
+        <button id="undoBtn">1て<br>もどす</button>
+        <button id="resetBtn">さいしょ<br>から</button>
+      </div>
+    </div>
+  </section>
+</div>
+<div id="overlay" class="hidden"><div class="card" id="card"></div></div>
+
+<!-- ===== ゲームのルール（画面に依存しない部分。tools/solve.js からも読み込む） ===== -->
+<script id="logic">
+/*
+  マップ記号
+  #  かべ           .  ゆか＋おかし     (空白) ゆか
+  P  プレイヤー      E  でぐち（おかしを全部とると開く）
+  R  おいかけおばけ（赤）  H  いったりきたり（青・よこ）  V  いったりきたり（青・たて）
+  M  かがみおばけ（紫：プレイヤーと左右反対に動く）
+  O  かぼちゃ（押せる）    L  ランタン（押せる・まわり1マスに敵が入れない）
+  C  おまもり（とると数ターン敵をやっつけられる）
+  1〜4 ワープ（同じ数字どうしでつながる）
+  ~  クモの巣のゆか（1回通ると通れなくなる）   *  クモの巣のゆか＋おかし
+*/
+const DIRS = {up:[0,-1], down:[0,1], left:[-1,0], right:[1,0]};
+const DIR_LIST = ['up','down','left','right'];
+const POWER_TURNS = 5;
+
+const LEVELS = [
+  { name:'おかしを あつめよう', par:20,
+    tip:'おかしを ぜんぶ とると でぐちが ひらくよ。あおい てきは いったりきたり するだけ。',
+    map:[
+      '#########',
+      '#P  .  E#',
+      '# # # # #',
+      '#.  H  .#',
+      '# # # # #',
+      '#   .   #',
+      '#########',
+    ]},
+  { name:'おいかけてくる', par:24,
+    tip:'あかい てきは まっすぐ ちかづいてくる。かべに ひっかけて にげよう。',
+    map:[
+      '#########',
+      '#P   .  #',
+      '# ## ## #',
+      '#.  #  .#',
+      '# #   # #',
+      '#   #   #',
+      '# ## ## #',
+      '#E  .  R#',
+      '#########',
+    ]},
+  { name:'かがみの てき', par:25,
+    tip:'むらさきの てきは きみと 左右はんたいに うごく。うえ・したは おなじ。',
+    map:[
+      '#########',
+      '#.   # .#',
+      '# # #   #',
+      '#P     M#',
+      '# #   # #',
+      '#.  E  .#',
+      '#########',
+    ]},
+  { name:'かぼちゃで とおせんぼ', par:23,
+    tip:'オレンジの かぼちゃは おせるよ。みちを ふさいで てきを とおせんぼ！',
+    map:[
+      '#########',
+      '## #E#  #',
+      '# .  # ##',
+      '#      ##',
+      '# O #. .#',
+      '#P     R#',
+      '#########',
+    ]},
+  { name:'おまもりの ちから', par:25,
+    tip:'ピンクの おまもりを とると しばらく てきを おうちに かえせるよ。',
+    map:[
+      '#########',
+      '#C    .R#',
+      '# # # # #',
+      '#.  P  .#',
+      '# # # # #',
+      '#R.    C#',
+      '###.E.###',
+      '#########',
+    ]},
+  { name:'ワープの おはか', par:18,
+    tip:'おなじ いろの おはかに はいると ワープするよ。',
+    map:[
+      '#########',
+      '#P  #  1#',
+      '# # # # #',
+      '# . # . #',
+      '# # # # #',
+      '#1  #  R#',
+      '#.      #',
+      '#E#######',
+      '#########',
+    ]},
+  { name:'クモの す', par:18,
+    tip:'しろい あみの ゆかは 1かい とおると すが はって とおれなくなる。てきも とおれないよ。',
+    map:[
+      '#########',
+      '#P ~ ~ E#',
+      '# # # # #',
+      '#*  *  *#',
+      '# # # # #',
+      '#*  ~  R#',
+      '#########',
+    ]},
+  { name:'ランタンの あかり', par:15,
+    tip:'きいろい ランタンの まわりには てきが はいれない。おして あんぜんな ばしょを つくろう。',
+    map:[
+      '#########',
+      '##P. R ##',
+      '# E     #',
+      '# #L #  #',
+      '#       #',
+      '#   #..##',
+      '#########',
+    ]},
+];
+
+function parseLevel(def){
+  const rows = def.map;
+  const h = rows.length, w = Math.max(...rows.map(r => r.length));
+  const tiles = new Array(w*h).fill('floor');
+  const warpGroups = {};
+  const s = {px:0, py:0, enemies:[], candy:[], charms:[], blocks:[], webbed:[], power:0, moves:0, status:'play'};
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++){
+    const ch = rows[y][x] ?? '#';
+    const i = y*w + x;
+    const enemy = (type, dx, dy) => s.enemies.push({type, x, y, dx, dy, hx:x, hy:y, hdx:dx, hdy:dy});
+    switch (ch){
+      case '#': tiles[i] = 'wall'; break;
+      case '.': s.candy.push(i); break;
+      case 'P': s.px = x; s.py = y; break;
+      case 'E': tiles[i] = 'exit'; break;
+      case 'R': enemy('chaser', 0, 0); break;
+      case 'H': enemy('bouncer', 1, 0); break;
+      case 'V': enemy('bouncer', 0, 1); break;
+      case 'M': enemy('mirror', 0, 0); break;
+      case 'O': s.blocks.push({type:'pumpkin', x, y}); break;
+      case 'L': s.blocks.push({type:'lantern', x, y}); break;
+      case 'C': s.charms.push(i); break;
+      case '~': tiles[i] = 'web'; break;
+      case '*': tiles[i] = 'web'; s.candy.push(i); break;
+      default:
+        if (/[1-4]/.test(ch)){ tiles[i] = 'warp'; (warpGroups[ch] ||= []).push(i); }
+    }
+  }
+  const warpTo = {}, warpNo = {};
+  for (const [no, list] of Object.entries(warpGroups)){
+    list.forEach(i => warpNo[i] = +no);
+    if (list.length === 2){ warpTo[list[0]] = list[1]; warpTo[list[1]] = list[0]; }
+  }
+  return { lv:{w, h, tiles, warpTo, warpNo}, state:s };
+}
+
+function cloneState(s){
+  return {px:s.px, py:s.py, enemies:s.enemies.map(e => ({...e})), candy:s.candy.slice(),
+    charms:s.charms.slice(), blocks:s.blocks.map(b => ({...b})), webbed:s.webbed.slice(),
+    power:s.power, moves:s.moves, status:s.status};
+}
+function tileAt(lv, x, y){ return (x < 0 || y < 0 || x >= lv.w || y >= lv.h) ? 'wall' : lv.tiles[y*lv.w + x]; }
+function blockAt(s, x, y){ return s.blocks.findIndex(b => b.x === x && b.y === y); }
+function enemyAt(s, x, y){ return s.enemies.some(e => e.x === x && e.y === y); }
+function isWebbed(lv, s, x, y){ return s.webbed.includes(y*lv.w + x); }
+function exitOpen(s){ return s.candy.length === 0; }
+function litCells(lv, s){
+  const set = new Set();
+  for (const b of s.blocks) if (b.type === 'lantern')
+    for (const [dx, dy] of [[0,0],[1,0],[-1,0],[0,1],[0,-1]]) set.add((b.y+dy)*lv.w + (b.x+dx));
+  return set;
+}
+function playerBlocked(lv, s, x, y){
+  const t = tileAt(lv, x, y);
+  return t === 'wall' || (t === 'exit' && !exitOpen(s)) || isWebbed(lv, s, x, y);
+}
+function blockCanEnter(lv, s, x, y){
+  const t = tileAt(lv, x, y);
+  return !(t === 'wall' || t === 'exit' || isWebbed(lv, s, x, y) || blockAt(s, x, y) >= 0 || enemyAt(s, x, y));
+}
+function enemyBlocked(lv, s, x, y, lit){
+  const t = tileAt(lv, x, y);
+  return t === 'wall' || t === 'exit' || isWebbed(lv, s, x, y) || blockAt(s, x, y) >= 0 || lit.has(y*lv.w + x);
+}
+function tryEnemyMove(lv, s, e, mx, my, lit){
+  if (mx === 0 && my === 0) return false;
+  if (enemyBlocked(lv, s, e.x+mx, e.y+my, lit)) return false;
+  e.x += mx; e.y += my; e.dx = mx; e.dy = my;
+  return true;
+}
+function moveEnemy(lv, s, e, pdx, pdy, lit){
+  if (e.type === 'chaser'){
+    // まっすぐ近づく（距離の大きい方の軸を優先）。おまもり中は逃げる
+    let ddx = s.px - e.x, ddy = s.py - e.y;
+    if (s.power > 0){ ddx = -ddx; ddy = -ddy; }
+    const hx = Math.sign(ddx), vy = Math.sign(ddy);
+    const order = Math.abs(ddx) >= Math.abs(ddy) ? [[hx,0],[0,vy]] : [[0,vy],[hx,0]];
+    for (const [mx, my] of order) if (tryEnemyMove(lv, s, e, mx, my, lit)) return;
+  } else if (e.type === 'bouncer'){
+    if (!tryEnemyMove(lv, s, e, e.dx, e.dy, lit)){
+      const rx = -e.dx, ry = -e.dy;
+      if (!tryEnemyMove(lv, s, e, rx, ry, lit)){ e.dx = rx; e.dy = ry; }
+    }
+  } else if (e.type === 'mirror'){
+    tryEnemyMove(lv, s, e, -pdx, pdy, lit);
+  }
+}
+// ぶつかり判定。おまもり中なら敵をおうちへ、そうでなければつかまる
+function resolveHits(s, olds, ox, oy){
+  for (let i = 0; i < s.enemies.length; i++){
+    const e = s.enemies[i];
+    let hit = e.x === s.px && e.y === s.py;
+    if (!hit && olds) hit = olds[i].x === s.px && olds[i].y === s.py && e.x === ox && e.y === oy; // すれちがい
+    if (!hit) continue;
+    if (s.power > 0){ e.x = e.hx; e.y = e.hy; e.dx = e.hdx; e.dy = e.hdy; }
+    else { s.status = 'caught'; s.caughtBy = i; return false; }
+  }
+  return true;
+}
+// 1手すすめる。動けないときは null
+function step(lv, s0, dir){
+  if (s0.status !== 'play') return null;
+  const [dx, dy] = DIRS[dir];
+  const nx = s0.px + dx, ny = s0.py + dy;
+  if (playerBlocked(lv, s0, nx, ny)) return null;
+  const s = cloneState(s0);
+  const bi = blockAt(s, nx, ny);
+  if (bi >= 0){
+    if (!blockCanEnter(lv, s, nx+dx, ny+dy)) return null;
+    s.blocks[bi].x += dx; s.blocks[bi].y += dy;
+  }
+  const ox = s.px, oy = s.py;
+  if (tileAt(lv, ox, oy) === 'web') s.webbed.push(oy*lv.w + ox);
+  s.px = nx; s.py = ny;
+  const ni = ny*lv.w + nx;
+  if (lv.tiles[ni] === 'warp' && lv.warpTo[ni] != null){
+    const to = lv.warpTo[ni], tx = to % lv.w, ty = Math.floor(to / lv.w);
+    if (blockAt(s, tx, ty) < 0){ s.px = tx; s.py = ty; s.warped = true; }
+  }
+  s.moves++;
+  const pi = s.py*lv.w + s.px;
+  let k = s.candy.indexOf(pi); if (k >= 0) s.candy.splice(k, 1);
+  k = s.charms.indexOf(pi); if (k >= 0){ s.charms.splice(k, 1); s.power = POWER_TURNS + 1; }
+  if (tileAt(lv, s.px, s.py) === 'exit' && exitOpen(s)){ s.status = 'win'; return s; }
+  if (!resolveHits(s, null)) return s;
+  const lit = litCells(lv, s);
+  const olds = s.enemies.map(e => ({x:e.x, y:e.y}));
+  for (const e of s.enemies) moveEnemy(lv, s, e, dx, dy, lit);
+  if (!resolveHits(s, olds, ox, oy)) return s;
+  if (s.power > 0) s.power--;
+  return s;
+}
+function stateKey(s){
+  return [s.px+','+s.py,
+    s.enemies.map(e => e.x+','+e.y+(e.type === 'bouncer' ? ','+e.dx+','+e.dy : '')).join(';'),
+    s.candy.join(','), s.charms.join(','), s.blocks.map(b => b.x+','+b.y).join(';'),
+    s.webbed.slice().sort((a,b) => a-b).join(','), s.power].join('|');
+}
+</script>
+
+<!-- ===== キャラ画像（tools/embed_sprites.py が キャラ/32x32 から埋め込む。手で編集しない） ===== -->
+<script id="sprites">const SPRITES = {"おかし_おにぎり": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAOCAYAAAAfSC3RAAAAT0lEQVR42mNgwAK05F3/wwCIzUAMQNZEtGZsmghqxqcJr2ayNBKjCatmdI0gPjLGqhFXKOLSCNdMtkZc/sCnEQTItxHmT2SMLarwydMHAAD79IFIVVtA+QAAAABJRU5ErkJggg==", "おかし_ぐるぐる": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAOCAYAAAAfSC3RAAAAYklEQVR42mNggAItedf/IPx/1lWsGCbPgAzwacBmAKYmXACbZrhGLApQDCRKIzabkPjYNaIbQJJGPLZhasTlT1yBQzBkcWmiKAFgM+Dm0jQwJqgBXTOyRgZiAdkakZ2MSx4Akea46kMi308AAAAASUVORK5CYII=", "おかし_しかく": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAOCAYAAAAfSC3RAAAANElEQVR42mNgoARoybv+JwXDNd1cmkYSBmumisYNVW54MV6NuGwZhBrJ8iN9ooPslEN3AACdXm7+zf57lwAAAABJRU5ErkJggg==", "おかし_わたあめ": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAOCAYAAAAfSC3RAAAAVUlEQVR42mNggAItedf/IPz/xCMUDBNHVsOArAldAzYDkNlEacKGB0AjsX7EqpFUzSghS0roMmAD+DTj1ISs+ebSNDCGRTpBTdg0MhAL6K8Ra4JGAwDBs4yjdZ8oGAAAAABJRU5ErkJggg==", "おかし_クッキー": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAOCAYAAAAfSC3RAAAASUlEQVR42mNggAItedf/IHxzaRpWDJNnQAb4NGAzAENTkJ4cGBOlmRiN6OIYGnFhkjTiczb1NNIncAjFI05NFKUcbAagY4YBBwC3VWcUgUIjkgAAAABJRU5ErkJggg==", "おかし_板チョコ": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAOCAYAAAAfSC3RAAAAR0lEQVR42mNgAAItedf/pGAGmKYqLz2sOEhPDqs4WDNM44oCLzhG14guh6ERl43ocigayXYqWRpBCkjB1HHqcA5VstMquQAAcp1HcsLqlNkAAAAASUVORK5CYII=", "体_いぬ": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAwUlEQVR42mNgGAVDDWjJu/7Hh2lu2f9fH7Dia+degDFVHAXT+GBTCwrG5wAYRtd3aFIGaQ7BZjElDkB3CNmWU+oAgo6ghuVkO4KQ5dR0AFZHUNP3ZIXCoHYAOZaTnCNwKaTEcnyOGHXAqAMGpwNAgqQ4gNhqmigHIDsC5hBCvifWAciOgJmPt0IixkBSMXpDhWCVTE3L0VtLRDVIRh0w6gBaWExS8xzmCHQDyBUjq18woA6AOQLdAErEyHYENcWwAQCZ9eJ9sUEEDAAAAABJRU5ErkJggg==", "体_うさぎ": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAg0lEQVR42mNgIAJoybv+R8bUUstArOX/f30A42vnXoAxLoNJUTs0HIBs4P99l8AYl8GkqB11ANUcgI7p4gA4Hx8edQA1HIBiOb0dgGE5BZgsRwyoA6hpOVmOGHXAqANGHTDqgFEHjDpgwB2A7AhkjZTyyWqUILuaUj7ZbUJq8kcBNgAAu1ET+yFoAawAAAAASUVORK5CYII=", "体_ねこ": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAnUlEQVR42u3XMQqAMAwF0N7E3Xt4bY/g4OAZHJ1dIoUWtERpmo8g/kCXkvw+nEwISvXdIAFc1ZmxcZlWQSJMmbkZhTDnxSbZNwiiKSsPlYMWSO7XckwAGWdzwGU+ZfgACuLplI9jAAlhOqdZDKAWosx8/AtYH1Yg7QDQIYAAAggggAAC/gto/a1XFwrPHWSjeRVwt1B67mArtedOqwOnQKAuohpelwAAAABJRU5ErkJggg==", "体_まる": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAi0lEQVR42mNgGGpAS971PzGYZpb///UBL7527gUYU9URMF8RshybIyh2CCkW0yQ0KHEAxY6g1HKKHEEtyweFA0h2BLUtH3XAqANGHUBWWTAyywFSq12qOYCWFhN0AK0tHvwhMCjSAD0cMrTKgVEHDIpGKbID0Dsa5IqR3S9AN4ASsaHnAJhB1BRDBgC+1QHx3jeOQAAAAABJRU5ErkJggg==", "口_いち": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAGCAYAAAD68A/GAAAAFklEQVR42mNgoAnQknf9jw+TrpCqAADYYxjRKLPbqQAAAABJRU5ErkJggg==", "口_さんかく": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAGCAYAAAD68A/GAAAALElEQVR42mNgQANa8q7/QZgBHwApqNLxAGO8iolSiKwIr2KiFMI8gAuD1AAAbpczB+WnN0sAAAAASUVORK5CYII=", "口_にっこり": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAGCAYAAAD68A/GAAAAOUlEQVR42mPQknf9TwxmABFVOh54MYbC/7P2oWAUhSAAUwyShFkFUwhXBAMwSWSFGIqQFaN4AAkAAKe6XfnDAZypAAAAAElFTkSuQmCC", "口_は": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAGCAYAAAD68A/GAAAAHUlEQVR42mNgAAItedf/+DADTBEM4GMPpEJiPQMApHGRQRxzb5QAAAAASUVORK5CYII=", "口_ひと": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAGCAYAAAD68A/GAAAAJ0lEQVR42mNgQANa8q7/QZgBH0BWgFMxNgkMMXxWweUIuodINXAAAKWUD4M8Mw6FAAAAAElFTkSuQmCC", "口_まる": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAGCAYAAAD68A/GAAAAKElEQVR42mNgQAJa8q7/kTEDNgCSqNLxQMEYirEpwqqYaIVEW02MZwBKPj9Vdw9AMwAAAABJRU5ErkJggg==", "口_ハート": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAGCAYAAAD68A/GAAAAMUlEQVR42mNgAAItedf/MMwABRhiIMaHkAo4hkmii2EoxIZxmopVEbKbCCrC5gF0RQAFXmCNPvgnCwAAAABJRU5ErkJggg==", "敵_おめん_弱": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAy0lEQVR42u2Wyw2AIAyG2cS7e7iKszmC47gJxkMJIfQB/CAHmjQmpI/P0NI6Z5B9O/x1e/99kbZmmQZAC2y1q04uBbfaQQAoeKycTXNyLrhFyX944iYQZOLiK+mZ3ATxK0CaHF0DKgTXx/45q2AkXzNAHIiU6xA6T22broFUSiyBwIpQew1LfSCtmA4eyDswxUs4xSzIgZQKbBKGqq4AiBWyA4S2ZARSgAuAq4EYSgPI+UJ3Q+2voSt5za4wDECajAtgAbgewvV2S8+/3R+7SfhvRIUAAAAASUVORK5CYII=", "敵_おめん_紫": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAy0lEQVR42u2Wyw2AIAyG2cS7e7iKyziWi7gJxkMJIfQB/CAHmjQmpI/P0NI6Z5B9O/x9ef99kbZmmQZAC2y1q04uBbfaQQAoeKycTXNyLrhFyX944iYQZOLiK+mZ3ATxK0CaHF0DKgTXx/45q2AkXzNAHIiU6xA6T22broFUSiyBwIpQew1LfSCtmA4eyDswxUs4xSzIgZQKbBKGqq4AiBWyA4S2ZARSgAuAq4EYSgPI+UJ3Q+2voSt5za4wDECajAtgAbgewvV2S8+/f5Ogo7rt8tsAAAAASUVORK5CYII=", "敵_おめん_赤": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAy0lEQVR42u2Wyw2AIAyG2cS7e7iKF6dwUzfBeIAgoQ/oj3KgSWNi+viUltY5hazL5v1x+ueJtFXLMABSYK1dc3IuuNYOAhCCp0rZmJNTwTUa/D9PbAJBJq4+kp7JVRC/AuTJ0TUgQlB97K+9CYbzVQOkgYJSHRLfZ7amY4jKJGZBUEUo3Ya1PpBWzAcP5B4Y4iYcYhYUj6VSYJMw/oUGgFQhO0BUShAFOAGoGnhBCQAlX+xuKHw1dCVv2RU+A+Am4wSYAK6HUL1t6fkbSiIPjbFyPjMAAAAASUVORK5CYII=", "敵_おめん_青": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAy0lEQVR42u2Wyw2AIAyG2cS7e7iGR2d1DDfBeCghhD6AH+RAk8aE9PEZWlrnDLJvhz9v778v0tYs0wBoga121cml4FY7CAAFj5WzaU7OBbco+Q9P3ASCTFx8JT2TmyB+BUiTo2tAheD62D9XFYzkawaIA5FyHULnqW3TNZBKiSUQWBFqr2GpD6QV08EDeQemeAmnmAU5kFKBTcJQ1RUAsUJ2gNCWjEAKcAFwNRBDaQA5X+huqP01dCWv2RWGAUiTcQEsANdDuN5u6fkXiFhlax8wzAAAAAAASUVORK5CYII=", "敵_どくろ_弱": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAtklEQVR42u2WwQ2AMAhFu4l393BXR3C7Gg9NCJYC8tvEhJ8QL4CvWJBSBtq3o55Xrc+zOBWJfSVpiSzJmh+NgwBwEMl6/lAAryXAfwE8L9cuphsCcfJQJTiA1moWPzNAb5A81jTq95GfCkADeCCXVKGen2kkS2W1JPb6TQOQtAxgSgWQdyAEgOgC00XUPkVkDphnwYwpmAAJAAfQWjEBEmAJAB3fdPFcCqD9Vz5txgiAsKA7vqIbx9CfvhFJxW4AAAAASUVORK5CYII=", "敵_どくろ_紫": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAtklEQVR42u2WwQ2AMAhFu4l393A6x3KwGg9NCJYC8tvEhJ8QL4CvWJBSBtq3o15nrc+zOBWJfSVpiSzJmh+NgwBwEMl6/lAAryXAfwE8L9cuphsCcfJQJTiA1moWPzNAb5A81jTq95GfCkADeCCXVKGen2kkS2W1JPb6TQOQtAxgSgWQdyAEgOgC00XUPkVkDphnwYwpmAAJAAfQWjEBEmAJAB3fdPFcCqD9Vz5txgiAsKA7vqIbyQeBcO+lpMwAAAAASUVORK5CYII=", "敵_どくろ_赤": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAt0lEQVR42u2WYQqAMAiFd5P+d49O0yk6+aJoIGtOzbdB4IMRgdqXqZlSR+uy5bwf+bomozy+ryAlkCZYsaN+EIAahDsteyiA9QTAfwEsD5cK0wyBeHNXJmoAqdU0dmqA1iC57x/1+r1nJwJQh9qxFpehlp1qJHNp1QS22g0D4DQNYEgGkDXgAkB0gaoQpU/hmQPqWTBiCgZAAMABxFYMgACYAUDHN108pwJI/5VPmzECwC3oji/oBNht3GOTAdejAAAAAElFTkSuQmCC", "敵_どくろ_青": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAtklEQVR42u2WwQ2AMAhFu4l393AN53WrGg9NCJYC8tvEhJ8QL4CvWJBSBtq3o55Xrc+zOBWJfSVpiSzJmh+NgwBwEMl6/lAAryXAfwE8L9cuphsCcfJQJTiA1moWPzNAb5A81jTq95GfCkADeCCXVKGen2kkS2W1JPb6TQOQtAxgSgWQdyAEgOgC00XUPkVkDphnwYwpmAAJAAfQWjEBEmAJAB3fdPFcCqD9Vz5txgiAsKA7vqIboCw+GKAzgKgAAAAASUVORK5CYII=", "目_おこり": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAHCAYAAAABIM1CAAAAJklEQVR42mNgoBRoybv+B2GK9ME4xBiEVy0+SVIswfAWud6kDwAAaTYfBQhNtpIAAAAASUVORK5CYII=", "目_ぎゅっ": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAHCAYAAAABIM1CAAAALUlEQVR42mPQknf9z0AmgOsFMUgxCKd6QgZhlYcJomNcmvGqI8sFFIcBpbEAAPOsMaEb/FxQAAAAAElFTkSuQmCC", "目_さんぼん": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAHCAYAAAABIM1CAAAAHElEQVR42mNggAItedf/2GhkgFcNRQaMZNupAQCIxTfVxcSJNQAAAABJRU5ErkJggg==", "目_ちがい": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAHCAYAAAABIM1CAAAAKklEQVR42mNgIBFoybv+xyqIjok2ACQAA8QYgtUAXJgoNcQYQNswoDQWAGx3SRtnICOkAAAAAElFTkSuQmCC", "目_ねむい": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAHCAYAAAABIM1CAAAAGUlEQVR42mNgGB5AS971PzomSQ3FBgwoAACIuh8FWvADqwAAAABJRU5ErkJggg==", "目_ひとつ目": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAHCAYAAAABIM1CAAAALElEQVR42mNgQANa8q7/8WEGfACk4P/lPLwYpyHYNMNsJcqQgTeA4jAgNxYAZdCzedx1+9kAAAAASUVORK5CYII=", "目_まる": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAHCAYAAAABIM1CAAAAM0lEQVR42mNggAItedf/MMyAA+BUgyyByxCcakAMGMBlCF41VDEAF8bnfAxvkB0GlMYCAOewhjsb/nvtAAAAAElFTkSuQmCC", "飾り_ランタン_ぎざぎざ": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAOCAYAAAAbvf3sAAAAV0lEQVR42mNggAItedf/+eez/oNoXGwGdMX4MFwDMYpRNJGsAWbL/1k2eDFJilE0IWtA1wzjI9MMyBwYxqYJqw3YnIDXBnw0ThsIaiA5WJGTBz7MQC4AAKX5TJ1fbIiQAAAAAElFTkSuQmCC", "飾り_ランタン_しかく": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAOCAYAAAAbvf3sAAAATklEQVR42mNgAAItedf/G6rc8GKQGgYYgGkA0dgwXg0MaICgBoI2gBj/Z9kQhcGa0DUg87HJUa6BaCfh0ohuI1YnIWPKnQQLWmIwA10AAF+UIqq0VZxeAAAAAElFTkSuQmCC", "飾り_ランタン_ておけ": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAOCAYAAAAbvf3sAAAAU0lEQVR42mNggAItedf/G6rcsGKQHAMygCkG0dgwhiayNPyfZYMXwzUQoxhFE7IGbJrR5eEakN2MrABZDMMGkpxEiMZpA8kaqBa0WJMHPsxALgAA+rQ8sYCHbqIAAAAASUVORK5CYII=", "飾り_リボン_とがり": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAOCAYAAAAmL5yKAAAAYUlEQVR42mNgAAItedf//2ddBWMQmwEHwKoOWRCfITjVYZOASSJjXGpwGgDC12IWgDEuebzeIGQAhjexGYLLAJwBjc/PyHIMhACxMUMbA/DFCtnOJ8sAfDRtDYAZgo9GBgDZZHsqXS3QrwAAAABJRU5ErkJggg==", "飾り_リボン_まる": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAOCAYAAAAmL5yKAAAAYklEQVR42mNgAAItedf/05r+wzGIz4AGcKpBl0BWgIxxqcFpAAgn+JwAY1zyg8QAXAEEwjADsIUDRkATCjR0eQZcAJ+X8GokpJkoQ6huAFGBh8sAZIW4xHEagisvENRMDgAADTqALAvuE0gAAAAASUVORK5CYII="};</script>
+
+<!-- ===== 画面・操作 ===== -->
+<script>
+const $ = id => document.getElementById(id);
+const cv = $('board'), ctx = cv.getContext('2d');
+const STORE = 'halloween-proto-stars';
+const ANIM_MS = 120;
+let stars = JSON.parse(localStorage.getItem(STORE) || '{}');
+let blinkTimer = null;
+let cur = 0, LV = null, S = null, prevS = null, hist = [], animStart = 0, cell = 32, dpr = 1;
+
+const C = {
+  floor:'#2d2546', floor2:'#2a2242', wall:'#8f7cf0', wallHi:'#b6a8ff', wallLo:'#6a57c9',
+  candy:'#ffd36e', candy2:'#ff9ad5', player:'#fffaf0', eye:'#2a1f45',
+  chaser:'#ff6b81', bouncer:'#5ec8ff', mirror:'#c38bff', scared:'#a8b8ff',
+  pumpkin:'#ff9a3c', stem:'#6fcf6a', lantern:'#ffe066', light:'rgba(255,224,102,0.20)',
+  exitC:'#4a405f', exitO:'#7dffb0', web:'rgba(255,255,255,0.35)', webbed:'#8c84a3',
+  charm:'#ff9ad5', warp:['#5ef0d0','#ffd36e','#ff9ad5','#a8c0ff'],
+};
+
+/* ---------- キャラの見た目（カスタム画面ができるまではランダム） ---------- */
+const IMG = {};
+const SIZE = 32;
+const ENEMY_COLOR = {chaser:'赤', bouncer:'青', mirror:'紫'};
+const ENEMY_KINDS = ['どくろ', 'おめん'];
+let playerImg = null, enemyLook = [], candyLook = {};
+
+const pick = list => list[Math.floor(Math.random() * list.length)];
+const spriteNames = prefix => Object.keys(SPRITES).filter(k => k.startsWith(prefix));
+function loadSprites(){
+  return Promise.all(Object.entries(SPRITES).map(([k, src]) => new Promise(done => {
+    const im = new Image(); im.onload = done; im.onerror = done; im.src = src; IMG[k] = im;
+  })));
+}
+// 体＋目＋口＋アクセサリーを32×32に重ねる。目と口の位置はどの体でも共通
+function makePlayer(){
+  const c = document.createElement('canvas');
+  c.width = c.height = SIZE;
+  const g = c.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  g.drawImage(IMG[pick(spriteNames('体_'))], 0, 0);
+  g.drawImage(IMG[pick(spriteNames('目_'))], 8, 13);
+  g.drawImage(IMG[pick(spriteNames('口_'))], 11, 21);
+  if (Math.random() < 0.7){
+    const acc = pick([...spriteNames('飾り_'), ...spriteNames('おかし_')]);
+    const at = acc.startsWith('飾り_リボン') ? [15, 0] : acc.startsWith('飾り_ランタン') ? [20, 17] : [18, 17];
+    g.drawImage(IMG[acc], at[0], at[1]);
+  }
+  return c;
+}
+function rollLooks(){
+  playerImg = makePlayer();
+  enemyLook = S.enemies.map(() => pick(ENEMY_KINDS));
+  candyLook = {};
+  S.candy.forEach(i => { candyLook[i] = pick(spriteNames('おかし_')); });
+}
+
+/* ---------- 画面切りかえ ---------- */
+function showSelect(){
+  $('play').classList.add('hidden'); $('select').classList.remove('hidden'); hideOverlay();
+  const list = $('stageList'); list.innerHTML = '';
+  LEVELS.forEach((lvDef, i) => {
+    const b = document.createElement('button');
+    const n = stars[i] || 0;
+    b.innerHTML = `<span class="no">ステージ ${i+1}</span><span class="nm">${lvDef.name}</span>` +
+      `<span class="st">${'★'.repeat(n)}${'☆'.repeat(3-n)}</span>`;
+    b.onclick = () => startLevel(i);
+    list.appendChild(b);
+  });
+}
+function startLevel(i, keepLook = false){
+  cur = i;
+  const p = parseLevel(LEVELS[i]);
+  LV = p.lv; S = p.state; prevS = null; hist = [];
+  if (!keepLook) rollLooks();
+  $('select').classList.add('hidden'); $('play').classList.remove('hidden'); hideOverlay();
+  $('stageTitle').textContent = `ステージ ${i+1}  ${LEVELS[i].name}`;
+  $('tip').textContent = LEVELS[i].tip;
+  fit(); updateInfo(); draw();
+}
+
+/* ---------- 操作 ---------- */
+function move(dir){
+  if (!S || S.status !== 'play' || !$('overlay').classList.contains('hidden')) return;
+  const n = step(LV, S, dir);
+  if (!n) return;
+  hist.push(S); prevS = S; S = n; animStart = performance.now();
+  updateInfo(); animate();
+  if (S.status !== 'play') setTimeout(showResult, ANIM_MS + 120);
+}
+function undo(){
+  if (!hist.length) return;
+  hideOverlay(); prevS = null; S = hist.pop(); updateInfo(); draw();
+}
+function reset(){ startLevel(cur, true); }
+
+document.querySelectorAll('[data-dir]').forEach(b => {
+  b.addEventListener('pointerdown', e => { e.preventDefault(); move(b.dataset.dir); });
+});
+$('undoBtn').onclick = undo;
+$('resetBtn').onclick = reset;
+$('backBtn').onclick = showSelect;
+const KEYMAP = {ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right', w:'up', s:'down', a:'left', d:'right'};
+addEventListener('keydown', e => {
+  if ($('play').classList.contains('hidden')) return;
+  if (KEYMAP[e.key]){ e.preventDefault(); move(KEYMAP[e.key]); }
+  else if (e.key === 'z' || e.key === 'Backspace') undo();
+  else if (e.key === 'r') reset();
+});
+// スワイプ
+let touch0 = null;
+$('boardWrap').addEventListener('touchstart', e => { const t = e.touches[0]; touch0 = {x:t.clientX, y:t.clientY}; }, {passive:true});
+$('boardWrap').addEventListener('touchmove', e => e.preventDefault(), {passive:false});
+$('boardWrap').addEventListener('touchend', e => {
+  if (!touch0) return;
+  const t = e.changedTouches[0], dx = t.clientX - touch0.x, dy = t.clientY - touch0.y;
+  touch0 = null;
+  if (Math.max(Math.abs(dx), Math.abs(dy)) < 20) return;
+  move(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));
+});
+
+/* ---------- 結果表示 ---------- */
+function starCount(moves, par){
+  if (!par) return 3;
+  return moves <= par ? 3 : moves <= Math.ceil(par*1.5) ? 2 : 1;
+}
+function showResult(){
+  const card = $('card');
+  if (S.status === 'win'){
+    const par = LEVELS[cur].par, n = starCount(S.moves, par);
+    if (n > (stars[cur] || 0)){ stars[cur] = n; localStorage.setItem(STORE, JSON.stringify(stars)); }
+    const hasNext = cur < LEVELS.length - 1;
+    card.innerHTML = `<h2>クリア！</h2><div class="stars">${'★'.repeat(n)}${'☆'.repeat(3-n)}</div>
+      <p>${S.moves} てで クリア${par ? `（もくひょう ${par} て）` : ''}</p>
+      <div class="btns">${hasNext ? '<button class="main" id="nextBtn">つぎの ステージへ</button>' : ''}
+      <button id="againBtn">もういちど</button><button id="selBtn">ステージを えらぶ</button></div>`;
+    if (hasNext) $('nextBtn').onclick = () => startLevel(cur + 1);
+    $('againBtn').onclick = reset; $('selBtn').onclick = showSelect;
+  } else {
+    card.innerHTML = `<h2>つかまった！</h2><p>1て もどして やりなおせるよ</p>
+      <div class="btns"><button class="main" id="ovUndo">1て もどす</button>
+      <button id="ovReset">さいしょから</button></div>`;
+    $('ovUndo').onclick = undo; $('ovReset').onclick = reset;
+  }
+  $('overlay').classList.remove('hidden');
+}
+function hideOverlay(){ $('overlay').classList.add('hidden'); }
+function updateInfo(){
+  $('candyInfo').textContent = S.candy.length;
+  $('moveInfo').textContent = S.moves;
+  const par = LEVELS[cur].par;
+  $('parInfo').textContent = par ? `/ ${par}` : '';
+  $('powerInfo').textContent = S.power > 0 ? `おまもり あと ${S.power}` : '';
+}
+
+/* ---------- 描画 ---------- */
+function fit(){
+  const wrap = $('boardWrap');
+  const aw = wrap.clientWidth, ah = wrap.clientHeight;
+  dpr = window.devicePixelRatio || 1;
+  // 1ドットが実機の整数ピクセルになるよう、1マスを32の倍数（実機ピクセル）にそろえる
+  const scale = Math.max(1, Math.floor(Math.min(aw / LV.w, ah / LV.h) * dpr / SIZE + 1e-6));
+  cell = scale * SIZE / dpr;
+  cv.style.width = LV.w*cell + 'px'; cv.style.height = LV.h*cell + 'px';
+  cv.width = Math.round(LV.w*cell*dpr); cv.height = Math.round(LV.h*cell*dpr);
+}
+addEventListener('resize', () => { if (LV && !$('play').classList.contains('hidden')){ fit(); draw(); } });
+
+function animate(){
+  draw();
+  if (performance.now() - animStart < ANIM_MS) requestAnimationFrame(animate);
+  else { prevS = null; draw(); }
+}
+function lerpPos(ax, ay, bx, by, t){
+  if (Math.abs(ax-bx) + Math.abs(ay-by) > 1) return [bx, by]; // ワープ等は瞬間移動
+  return [ax + (bx-ax)*t, ay + (by-ay)*t];
+}
+function rect(x, y, w, h, c){ ctx.fillStyle = c; ctx.fillRect(x, y, w, h); }
+
+function draw(){
+  if (!LV) return;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  const u = cell, px = Math.max(1, Math.round(u/16)); // 1ドット
+  const t = prevS ? Math.min(1, (performance.now() - animStart) / ANIM_MS) : 1;
+  const lit = litCells(LV, S);
+  const open = exitOpen(S);
+
+  for (let y = 0; y < LV.h; y++) for (let x = 0; x < LV.w; x++){
+    const i = y*LV.w + x, X = x*u, Y = y*u, tile = LV.tiles[i];
+    if (tile === 'wall'){
+      rect(X, Y, u, u, C.wall);
+      rect(X, Y, u, px*2, C.wallHi);
+      rect(X, Y+u-px*2, u, px*2, C.wallLo);
+      continue;
+    }
+    rect(X, Y, u, u, (x+y) % 2 ? C.floor : C.floor2);
+    if (lit.has(i)) rect(X, Y, u, u, C.light);
+    if (tile === 'exit'){
+      rect(X+px*3, Y+px*2, u-px*6, u-px*2, open ? C.exitO : C.exitC);
+      rect(X+px*5, Y+px*4, u-px*10, u-px*4, open ? '#3d8f63' : '#352d48');
+    } else if (tile === 'warp'){
+      const col = C.warp[(LV.warpNo[i]-1) % 4];
+      // おはか（仮）：上が丸い四角
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.roundRect(X+px*3, Y+px*3, u-px*6, u-px*5, [u*0.35, u*0.35, px, px]); ctx.fill();
+      ctx.fillStyle = C.floor2; ctx.font = `bold ${Math.floor(u*0.42)}px monospace`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(LV.warpNo[i], X+u/2, Y+u*0.56);
+    } else if (tile === 'web'){
+      const webbed = S.webbed.includes(i);
+      if (webbed) rect(X+px, Y+px, u-px*2, u-px*2, C.webbed);
+      ctx.strokeStyle = webbed ? '#e8e2f5' : C.web; ctx.lineWidth = px;
+      ctx.beginPath();
+      ctx.moveTo(X+px*2, Y+px*2); ctx.lineTo(X+u-px*2, Y+u-px*2);
+      ctx.moveTo(X+u-px*2, Y+px*2); ctx.lineTo(X+px*2, Y+u-px*2);
+      ctx.moveTo(X+u/2, Y+px*2); ctx.lineTo(X+u/2, Y+u-px*2);
+      ctx.moveTo(X+px*2, Y+u/2); ctx.lineTo(X+u-px*2, Y+u/2);
+      ctx.stroke();
+    }
+    if (S.candy.includes(i)){
+      const dot = u / SIZE, s = 14*dot, o = 9*dot; // おかしは14×14ドット
+      ctx.drawImage(IMG[candyLook[i]], X+o, Y+o, s, s);
+    }
+    if (S.charms.includes(i)){
+      // おまもり（仮）：ピンクのひし形
+      ctx.fillStyle = C.charm; ctx.beginPath();
+      ctx.moveTo(X+u/2, Y+px*3); ctx.lineTo(X+u-px*4, Y+u/2);
+      ctx.lineTo(X+u/2, Y+u-px*3); ctx.lineTo(X+px*4, Y+u/2); ctx.closePath(); ctx.fill();
+    }
+  }
+
+  // かぼちゃ・ランタン
+  S.blocks.forEach((b, k) => {
+    const p = prevS ? prevS.blocks[k] : b;
+    const [bx, by] = lerpPos(p.x, p.y, b.x, b.y, t);
+    const X = bx*u, Y = by*u;
+    if (b.type === 'pumpkin'){
+      ctx.fillStyle = C.pumpkin; ctx.beginPath(); ctx.roundRect(X+px*2, Y+px*4, u-px*4, u-px*6, px*4); ctx.fill();
+      rect(X+u/2-px, Y+px*2, px*2, px*3, C.stem);
+    } else {
+      rect(X+px*4, Y+px*3, u-px*8, u-px*6, C.lantern);
+      rect(X+px*6, Y+px*5, u-px*12, u-px*10, '#fff6c2');
+    }
+  });
+
+  // 敵
+  const scared = S.power > 0;
+  const blink = scared && S.power <= 2 && Math.floor(performance.now()/200) % 2;
+  S.enemies.forEach((e, k) => {
+    const p = prevS ? prevS.enemies[k] : e;
+    const [ex, ey] = lerpPos(p.x, p.y, e.x, e.y, t);
+    const X = ex*u, Y = ey*u;
+    ctx.globalAlpha = blink ? 0.45 : 1;
+    ctx.drawImage(IMG[`敵_${enemyLook[k]}_${scared ? '弱' : ENEMY_COLOR[e.type]}`], X, Y, u, u);
+    ctx.globalAlpha = 1;
+    if (e.type === 'bouncer'){ // すすむ方向の矢印
+      const cx = X+u/2 + e.dx*u*0.42, cy = Y+u/2 + e.dy*u*0.42, a = px*3;
+      ctx.fillStyle = '#ffffff'; ctx.strokeStyle = C.eye; ctx.lineWidth = px; ctx.beginPath();
+      if (e.dx){ ctx.moveTo(cx + e.dx*a, cy); ctx.lineTo(cx - e.dx*a, cy - a); ctx.lineTo(cx - e.dx*a, cy + a); }
+      else { ctx.moveTo(cx, cy + e.dy*a); ctx.lineTo(cx - a, cy - e.dy*a); ctx.lineTo(cx + a, cy - e.dy*a); }
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+  });
+
+  // プレイヤー
+  {
+    const p = prevS || S;
+    const [qx, qy] = lerpPos(p.px, p.py, S.px, S.py, t);
+    const X = qx*u, Y = qy*u;
+    ctx.drawImage(playerImg, X, Y, u, u);
+    if (scared){ ctx.strokeStyle = C.charm; ctx.lineWidth = px*2; ctx.beginPath(); ctx.arc(X+u/2, Y+u/2, u*0.46, 0, Math.PI*2); ctx.stroke(); }
+  }
+  if (scared && S.power <= 2 && !blinkTimer) blinkTimer = setTimeout(() => { blinkTimer = null; draw(); }, 200);
+}
+
+loadSprites().then(showSelect);
+</script>
+</body>
+</html>
